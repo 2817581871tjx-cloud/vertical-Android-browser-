@@ -1,0 +1,6 @@
+{
+  "name": "LeftTab 浏览器",
+  "description": "专为平板横屏打造的左侧栏垂直标签页浏览器，内容显示上下零遮挡，支持油猴脚本扩展、多标签与主流浏览器功能",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
