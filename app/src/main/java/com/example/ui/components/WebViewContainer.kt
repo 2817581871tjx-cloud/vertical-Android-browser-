@@ -93,13 +93,6 @@ fun WebViewContainer(
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
 
-                // Prevent Mesa hardware rendernode probing on emulator environment
-                try {
-                    setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-                } catch (e: Exception) {
-                    // Fallback gracefully
-                }
-
                 settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
