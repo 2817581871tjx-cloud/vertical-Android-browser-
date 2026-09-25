@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -110,11 +111,11 @@ fun UserscriptManagerDialog(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "油猴脚本扩展 (Userscripts)",
+                                text = "扩展中心与脚本插件 (Extensions & Scripts)",
                                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                             )
                             Text(
-                                text = "支持标准 Tampermonkey 脚本格式与自定义 Javascript 注入",
+                                text = "支持运行 Google/油猴标准脚本与自定义 JavaScript 扩展",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -127,11 +128,41 @@ fun UserscriptManagerDialog(
                     ) {
                         Icon(imageVector = Icons.Default.Add, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("新增脚本")
+                        Text("新增扩展")
                     }
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+                // Chrome Extension & Userscript compatibility explanation banner
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "【插件使用提示】安卓原生 WebView 受系统沙箱限制，不支持桌面版 .crx 扩展包（缺少 chrome.runtime/background APIs）。LeftTab 搭载了全功能用户脚本引擎，全面兼容绝大多数 Chrome / Tampermonkey 油猴脚本与自定义 JS 扩展，已内置 Google 智能翻译、全网去广告、夜间护眼模式与视频倍速增强！",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
 
                 // Scripts List
                 LazyColumn(

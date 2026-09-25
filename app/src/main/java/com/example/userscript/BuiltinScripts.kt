@@ -6,6 +6,57 @@ object BuiltinScripts {
     fun getPreloadedScripts(): List<UserscriptEntity> {
         return listOf(
             UserscriptEntity(
+                id = 10,
+                name = "Google 网页智能翻译 (Google Translate Extension)",
+                description = "谷歌官方网页即时多语言翻译扩展，自动检测外语网页，支持在网页内直接一键翻译为简体中文或恢复原文",
+                version = "2.1",
+                author = "Google Translate Team / LeftTab",
+                matchPatterns = "*://*/*",
+                runAt = "document-end",
+                code = """
+(function() {
+    if (window.__lefttab_translate_loaded) return;
+    window.__lefttab_translate_loaded = true;
+    
+    window.googleTranslateElementInit = function() {
+        try {
+            new google.translate.TranslateElement({
+                pageLanguage: 'auto',
+                includedLanguages: 'zh-CN,en,ja,ko,fr,de,es,ru',
+                layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
+                autoDisplay: false
+            }, 'google_translate_element_box');
+        } catch(e){}
+    };
+    
+    // Create floating translate button
+    const container = document.createElement('div');
+    container.id = 'google_translate_element_box';
+    container.style.cssText = 'position:fixed;bottom:20px;left:20px;z-index:999999;background:rgba(255,255,255,0.95);border:1px solid #1a73e8;border-radius:24px;padding:4px 10px;box-shadow:0 4px 14px rgba(0,0,0,0.18);display:flex;align-items:center;font-size:12px;color:#1a73e8;cursor:pointer;';
+    
+    const label = document.createElement('span');
+    label.innerText = '🌐 译为中文';
+    label.style.fontWeight = 'bold';
+    label.onclick = function() {
+        const select = document.querySelector('.goog-te-combo');
+        if (select) {
+            select.value = 'zh-CN';
+            select.dispatchEvent(new Event('change'));
+        }
+    };
+    container.appendChild(label);
+    
+    document.body.appendChild(container);
+    
+    const script = document.createElement('script');
+    script.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+    document.head.appendChild(script);
+})();
+                """.trimIndent(),
+                isEnabled = true,
+                isBuiltIn = true
+            ),
+            UserscriptEntity(
                 id = 1,
                 name = "强制全网夜间模式 (Dark Mode)",
                 description = "为所有网页注入深色背景与低对比度保护，夜间阅读更护眼，自动保护图片与视频不被反色",

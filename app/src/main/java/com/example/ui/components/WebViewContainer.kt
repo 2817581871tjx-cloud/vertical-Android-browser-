@@ -27,7 +27,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -45,8 +44,22 @@ import com.example.userscript.UserscriptEngine
 import com.example.viewmodel.WebCommand
 import kotlinx.coroutines.flow.SharedFlow
 
-private const val DESKTOP_USER_AGENT =
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 LeftTab/1.0"
+/**
+ * Dynamically derives Desktop User Agent from the Android system's real WebView User Agent.
+ * This preserves the real system WebView / Chrome version (e.g., Chrome 133, 134) instead of
+ * hardcoding an obsolete version like 128.0.
+ */
+private fun getDesktopUserAgent(context: Context): String {
+    val defaultUA = try {
+        WebSettings.getDefaultUserAgent(context)
+    } catch (e: Exception) {
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36"
+    }
+    return defaultUA
+        .replace("Mobile Safari", "Safari")
+        .replace("Mobile", "")
+        .replace(Regex("\\(Linux;.*Android[^;)]*\\)"), "(X11; Linux x86_64)")
+}
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -70,12 +83,13 @@ fun WebViewContainer(
     var customVideoView by remember { mutableStateOf<View?>(null) }
     var customVideoCallback by remember { mutableStateOf<WebChromeClient.CustomViewCallback?>(null) }
 
-    // Clean up closed tabs from pool
+    // Clean up closed tabs from pool and view hierarchy
     val currentTabIds = remember(tabs) { tabs.map { it.id }.toSet() }
     LaunchedEffect(currentTabIds) {
         val deadTabIds = webViewPool.keys.filter { !currentTabIds.contains(it) }
         for (deadId in deadTabIds) {
             webViewPool.remove(deadId)?.apply {
+                (parent as? ViewGroup)?.removeView(this)
                 stopLoading()
                 clearHistory()
                 loadUrl("about:blank")
@@ -84,7 +98,7 @@ fun WebViewContainer(
         }
     }
 
-    // Helper to configure a WebView
+    // Helper to configure a WebView with the device's native system WebView engine
     fun getOrCreateWebView(tab: BrowserTab): WebView {
         return webViewPool.getOrPut(tab.id) {
             WebView(context).apply {
@@ -93,26 +107,47 @@ fun WebViewContainer(
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
 
+                // CRITICAL FIX FOR BLACK SCREEN:
+                // Explicitly set background color to WHITE so WebView hardware canvas never renders black while loading
+                setBackgroundColor(android.graphics.Color.WHITE)
+
                 settings.apply {
                     javaScriptEnabled = true
-                    domStorageEnabled = true
-                    databaseEnabled = true
+                    domStorageEnabled = !tab.isIncognito
+                    databaseEnabled = !tab.isIncognito
                     useWideViewPort = true
                     loadWithOverviewMode = true
                     setSupportZoom(true)
                     builtInZoomControls = true
                     displayZoomControls = false
                     mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                    allowFileAccess = true
+                    allowFileAccess = !tab.isIncognito
                     allowContentAccess = true
                     mediaPlaybackRequiresUserGesture = false
-                    userAgentString = if (tab.isDesktopMode) DESKTOP_USER_AGENT else null
+
+                    // If incognito mode is active: do not cache or save forms
+                    if (tab.isIncognito) {
+                        cacheMode = WebSettings.LOAD_NO_CACHE
+                        saveFormData = false
+                        setGeolocationEnabled(false)
+                    } else {
+                        cacheMode = WebSettings.LOAD_DEFAULT
+                    }
+
+                    // ACCURATE SYSTEM WEBVIEW KERNEL:
+                    // When isDesktopMode is false: userAgentString = null directly uses the system's exact WebView UA
+                    // When isDesktopMode is true: derives desktop UA from the system default UA preserving real Chrome version
+                    userAgentString = if (tab.isDesktopMode) getDesktopUserAgent(context) else null
                 }
 
                 try {
                     val cookieManager = CookieManager.getInstance()
-                    cookieManager.setAcceptCookie(true)
-                    cookieManager.setAcceptThirdPartyCookies(this, true)
+                    if (tab.isIncognito) {
+                        cookieManager.setAcceptThirdPartyCookies(this, false)
+                    } else {
+                        cookieManager.setAcceptCookie(true)
+                        cookieManager.setAcceptThirdPartyCookies(this, true)
+                    }
                 } catch (e: Exception) {
                     // Ignore cookie initialization exception
                 }
@@ -148,7 +183,9 @@ fun WebViewContainer(
                             onTabNavigationChanged(tab.id, canGoBack(), canGoForward())
                             val pageTitle = title ?: it
                             onTabTitleChanged(tab.id, pageTitle)
-                            onRecordHistory(pageTitle, it)
+                            if (!tab.isIncognito) {
+                                onRecordHistory(pageTitle, it)
+                            }
 
                             // Inject document-end scripts
                             if (view != null) {
@@ -172,7 +209,6 @@ fun WebViewContainer(
                         return if (requestUrl.startsWith("http://") || requestUrl.startsWith("https://")) {
                             false
                         } else {
-                            // Specialized intents like mailto, tel, etc.
                             try {
                                 val intent = android.content.Intent(
                                     android.content.Intent.ACTION_VIEW,
@@ -190,7 +226,6 @@ fun WebViewContainer(
                         view: WebView?,
                         detail: RenderProcessGoneDetail?
                     ): Boolean {
-                        // Return true to prevent Android system from terminating the app process
                         view?.let {
                             webViewPool.remove(tab.id)
                             (it.parent as? ViewGroup)?.removeView(it)
@@ -250,6 +285,8 @@ fun WebViewContainer(
                 is WebCommand.GoForward -> cmd.tabId
                 is WebCommand.Reload -> cmd.tabId
                 is WebCommand.StopLoading -> cmd.tabId
+                is WebCommand.TranslatePage -> cmd.tabId
+                is WebCommand.RestoreOriginalPage -> cmd.tabId
                 else -> activeTab?.id
             }
 
@@ -273,6 +310,63 @@ fun WebViewContainer(
                     CookieManager.getInstance().removeAllCookies(null)
                     CookieManager.getInstance().flush()
                 }
+                is WebCommand.TranslatePage -> {
+                    // Inject Google Translate element script directly into webpage
+                    val script = """
+                        javascript:(function() {
+                            if (window.__lefttab_translate_loaded) {
+                                var combo = document.querySelector('.goog-te-combo');
+                                if (combo) {
+                                    combo.value = '${cmd.targetLanguage}';
+                                    combo.dispatchEvent(new Event('change'));
+                                }
+                                return;
+                            }
+                            window.__lefttab_translate_loaded = true;
+                            window.googleTranslateElementInit = function() {
+                                try {
+                                    new google.translate.TranslateElement({
+                                        pageLanguage: 'auto',
+                                        includedLanguages: 'zh-CN,en,ja,ko,fr,de,es,ru,it',
+                                        layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
+                                        autoDisplay: false
+                                    }, 'google_translate_float_box');
+                                    setTimeout(function() {
+                                        var combo = document.querySelector('.goog-te-combo');
+                                        if (combo) {
+                                            combo.value = '${cmd.targetLanguage}';
+                                            combo.dispatchEvent(new Event('change'));
+                                        }
+                                    }, 600);
+                                } catch(e){}
+                            };
+                            var box = document.getElementById('google_translate_float_box');
+                            if (!box) {
+                                box = document.createElement('div');
+                                box.id = 'google_translate_float_box';
+                                box.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:999999;background:#fff;border:1px solid #1a73e8;border-radius:12px;padding:6px 12px;box-shadow:0 4px 16px rgba(0,0,0,0.2);';
+                                document.body.appendChild(box);
+                            }
+                            var s = document.createElement('script');
+                            s.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+                            document.head.appendChild(s);
+                        })();
+                    """.trimIndent()
+                    webView.loadUrl(script)
+                }
+                is WebCommand.RestoreOriginalPage -> {
+                    val script = """
+                        javascript:(function() {
+                            var combo = document.querySelector('.goog-te-combo');
+                            if (combo) {
+                                combo.value = '';
+                                combo.dispatchEvent(new Event('change'));
+                            }
+                            window.location.reload();
+                        })();
+                    """.trimIndent()
+                    webView.loadUrl(script)
+                }
             }
         }
     }
@@ -281,7 +375,7 @@ fun WebViewContainer(
     LaunchedEffect(activeTab?.isDesktopMode) {
         val tab = activeTab ?: return@LaunchedEffect
         val webView = webViewPool[tab.id] ?: return@LaunchedEffect
-        val targetUA = if (tab.isDesktopMode) DESKTOP_USER_AGENT else null
+        val targetUA = if (tab.isDesktopMode) getDesktopUserAgent(context) else null
         if (webView.settings.userAgentString != targetUA) {
             webView.settings.userAgentString = targetUA
         }
@@ -306,31 +400,65 @@ fun WebViewContainer(
         return
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        if (activeTab != null) {
-            key(activeTab.id) {
-                AndroidView(
-                    factory = {
-                        val wv = getOrCreateWebView(activeTab)
-                        (wv.parent as? ViewGroup)?.removeView(wv)
-                        wv
-                    },
-                    update = { webView ->
-                        // If activeTab switched to this webview, ensure it is brought to front
-                        if (activeTab.url.isNotBlank() &&
-                            activeTab.url != "about:blank" &&
-                            webView.url != activeTab.url &&
-                            !activeTab.isLoading &&
-                            webView.url == null
-                        ) {
-                            webView.loadUrl(activeTab.url)
-                        }
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+    // PERSISTENT CONTAINER HOSTING ALL ACTIVE TABS:
+    // Avoid tearing down AndroidView on tab switch. This prevents the EGL surface recreation / render node
+    // teardown and completely eliminates the brief black screen!
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.White)
+    ) {
+        AndroidView(
+            factory = { ctx ->
+                FrameLayout(ctx).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    setBackgroundColor(android.graphics.Color.WHITE)
+                }
+            },
+            update = { container ->
+                if (activeTab != null) {
+                    val activeWv = getOrCreateWebView(activeTab)
 
-            // Ultra-slim (2dp) top edge loading progress line (Zero content obstruction!)
+                    // Attach to container if not already attached
+                    if (activeWv.parent != container) {
+                        (activeWv.parent as? ViewGroup)?.removeView(activeWv)
+                        container.addView(activeWv)
+                    }
+
+                    // Set active WebView visible and all other tab WebViews gone
+                    for (tab in tabs) {
+                        val wv = webViewPool[tab.id] ?: continue
+                        if (tab.id == activeTab.id) {
+                            if (wv.visibility != View.VISIBLE) {
+                                wv.visibility = View.VISIBLE
+                            }
+                            wv.bringToFront()
+                        } else {
+                            if (wv.visibility != View.GONE) {
+                                wv.visibility = View.GONE
+                            }
+                        }
+                    }
+
+                    // Initial or pending navigation
+                    if (activeTab.url.isNotBlank() &&
+                        activeTab.url != "about:blank" &&
+                        activeWv.url != activeTab.url &&
+                        !activeTab.isLoading &&
+                        activeWv.url == null
+                    ) {
+                        activeWv.loadUrl(activeTab.url)
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        // Ultra-slim (2.5dp) top edge loading progress line (Zero content obstruction!)
+        if (activeTab != null) {
             AnimatedVisibility(
                 visible = activeTab.isLoading && activeTab.progress < 100,
                 enter = fadeIn(),

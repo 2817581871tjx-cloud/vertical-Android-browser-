@@ -9,11 +9,21 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -41,6 +51,7 @@ import com.example.ui.components.HistoryDialog
 import com.example.ui.components.LeftSidebar
 import com.example.ui.components.SettingsDialog
 import com.example.ui.components.StartPageView
+import com.example.ui.components.TranslationBar
 import com.example.ui.components.UserscriptManagerDialog
 import com.example.ui.components.WebViewContainer
 import com.example.viewmodel.BrowserViewModel
@@ -60,6 +71,8 @@ fun BrowserScreen(
     val history by viewModel.history.collectAsStateWithLifecycle()
     val searchEngine by viewModel.searchEngine.collectAsStateWithLifecycle()
     val isIncognito by viewModel.isIncognito.collectAsStateWithLifecycle()
+    val showTranslationBar by viewModel.showTranslationBar.collectAsStateWithLifecycle()
+    val isTranslating by viewModel.isTranslating.collectAsStateWithLifecycle()
 
     val showUserscriptDialog by viewModel.showUserscriptDialog.collectAsStateWithLifecycle()
     val showBookmarksDialog by viewModel.showBookmarksDialog.collectAsStateWithLifecycle()
@@ -114,6 +127,8 @@ fun BrowserScreen(
                     onToggleExpand = { viewModel.toggleSidebarExpanded() },
                     onToggleHide = { viewModel.toggleSidebarHidden() },
                     onBookmarkCurrent = { viewModel.toggleBookmarkCurrent() },
+                    onToggleIncognito = { viewModel.toggleIncognito() },
+                    onTranslatePage = { viewModel.toggleTranslationBar() },
                     onOpenUserscripts = { viewModel.setUserscriptDialogVisible(true) },
                     onOpenBookmarks = { viewModel.setBookmarksDialogVisible(true) },
                     onOpenHistory = { viewModel.setHistoryDialogVisible(true) },
@@ -122,47 +137,74 @@ fun BrowserScreen(
                 )
             }
 
-            // Main Web View Area (Occupies full vertical height from top to bottom)
-            Box(
+            // Main Web View Area (Occupies full vertical height with status bar immersion)
+            Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
             ) {
-                if (activeTab != null && (activeTab.url == "about:blank" || activeTab.url.isBlank())) {
-                    StartPageView(
-                        searchEngine = searchEngine,
-                        onNavigate = { viewModel.loadUrl(it) },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    WebViewContainer(
-                        tabs = tabs,
-                        activeTab = activeTab,
-                        userscripts = userscripts,
-                        webCommands = viewModel.webCommands,
-                        onTabUrlChanged = { id, url -> viewModel.updateTabUrl(id, url) },
-                        onTabTitleChanged = { id, title -> viewModel.updateTabTitle(id, title) },
-                        onTabLoadingChanged = { id, loading, prog -> viewModel.updateTabLoading(id, loading, prog) },
-                        onTabNavigationChanged = { id, back, fwd -> viewModel.updateTabNavigation(id, back, fwd) },
-                        onTabFaviconChanged = { id, icon -> viewModel.updateTabFavicon(id, icon) },
-                        onFindMatchesFound = { cur, tot -> viewModel.setFindMatches(cur, tot) },
-                        onScriptInjected = { viewModel.onScriptInjected(it) },
-                        onRecordHistory = { title, url -> viewModel.recordHistory(title, url) },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+                // Unified status bar immersion spacer matching app surface theme
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .windowInsetsTopHeight(WindowInsets.statusBars)
+                        .background(MaterialTheme.colorScheme.surface)
+                )
 
-                // Find In Page floating bar
-                if (showFindInPage) {
-                    FindInPageBar(
-                        query = findQuery,
-                        matchCount = findMatches,
-                        onQueryChange = { viewModel.onFindQueryChanged(it) },
-                        onFindNext = { viewModel.findNext() },
-                        onFindPrevious = { viewModel.findPrevious() },
-                        onClose = { viewModel.setFindInPageVisible(false) },
-                        modifier = Modifier.align(Alignment.TopEnd)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom))
+                ) {
+                    if (activeTab != null && (activeTab.url == "about:blank" || activeTab.url.isBlank())) {
+                        StartPageView(
+                            searchEngine = searchEngine,
+                            onNavigate = { viewModel.loadUrl(it) },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        WebViewContainer(
+                            tabs = tabs,
+                            activeTab = activeTab,
+                            userscripts = userscripts,
+                            webCommands = viewModel.webCommands,
+                            onTabUrlChanged = { id, url -> viewModel.updateTabUrl(id, url) },
+                            onTabTitleChanged = { id, title -> viewModel.updateTabTitle(id, title) },
+                            onTabLoadingChanged = { id, loading, prog -> viewModel.updateTabLoading(id, loading, prog) },
+                            onTabNavigationChanged = { id, back, fwd -> viewModel.updateTabNavigation(id, back, fwd) },
+                            onTabFaviconChanged = { id, icon -> viewModel.updateTabFavicon(id, icon) },
+                            onFindMatchesFound = { cur, tot -> viewModel.setFindMatches(cur, tot) },
+                            onScriptInjected = { viewModel.onScriptInjected(it) },
+                            onRecordHistory = { title, url -> viewModel.recordHistory(title, url) },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+
+                    // Translation floating bar
+                    TranslationBar(
+                        isVisible = showTranslationBar,
+                        isTranslating = isTranslating,
+                        onTranslateToChinese = { viewModel.translateActivePage("zh-CN") },
+                        onTranslateToEnglish = { viewModel.translateActivePage("en") },
+                        onRestoreOriginal = { viewModel.restoreActivePageOriginal() },
+                        onTranslateViaGoogleWeb = { viewModel.translateViaGoogleWeb() },
+                        onClose = { viewModel.setTranslationBarVisible(false) },
+                        modifier = Modifier.align(Alignment.TopCenter)
                     )
+
+                    // Find In Page floating bar
+                    if (showFindInPage) {
+                        FindInPageBar(
+                            query = findQuery,
+                            matchCount = findMatches,
+                            onQueryChange = { viewModel.onFindQueryChanged(it) },
+                            onFindNext = { viewModel.findNext() },
+                            onFindPrevious = { viewModel.findPrevious() },
+                            onClose = { viewModel.setFindInPageVisible(false) },
+                            modifier = Modifier.align(Alignment.TopEnd)
+                        )
+                    }
                 }
             }
         }

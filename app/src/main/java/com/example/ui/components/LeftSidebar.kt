@@ -15,10 +15,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -47,6 +50,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Tab
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -107,6 +111,8 @@ fun LeftSidebar(
     onToggleExpand: () -> Unit,
     onToggleHide: () -> Unit,
     onBookmarkCurrent: () -> Unit,
+    onToggleIncognito: () -> Unit,
+    onTranslatePage: () -> Unit,
     onOpenUserscripts: () -> Unit,
     onOpenBookmarks: () -> Unit,
     onOpenHistory: () -> Unit,
@@ -121,55 +127,66 @@ fun LeftSidebar(
             .fillMaxHeight()
             .width(if (isExpanded) 280.dp else 64.dp)
             .animateContentSize(),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 3.dp,
+        color = if (isIncognito) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f) else MaterialTheme.colorScheme.surface,
+        tonalElevation = if (isIncognito) 6.dp else 3.dp,
         shadowElevation = 4.dp
     ) {
-        if (isExpanded) {
-            ExpandedSidebarContent(
-                tabs = tabs,
-                activeTab = activeTab,
-                enabledScriptsCount = enabledScriptsCount,
-                searchEngine = searchEngine,
-                isIncognito = isIncognito,
-                onSelectTab = onSelectTab,
-                onCloseTab = onCloseTab,
-                onCloseOtherTabs = onCloseOtherTabs,
-                onNewTab = onNewTab,
-                onNavigate = onNavigate,
-                onGoBack = onGoBack,
-                onGoForward = onGoForward,
-                onReloadOrStop = onReloadOrStop,
-                onGoHome = onGoHome,
-                onToggleDesktopMode = onToggleDesktopMode,
-                onToggleExpand = onToggleExpand,
-                onToggleHide = onToggleHide,
-                onBookmarkCurrent = onBookmarkCurrent,
-                onOpenUserscripts = onOpenUserscripts,
-                onOpenBookmarks = onOpenBookmarks,
-                onOpenHistory = onOpenHistory,
-                onOpenFindInPage = onOpenFindInPage,
-                onOpenSettings = onOpenSettings
-            )
-        } else {
-            SlimSidebarContent(
-                tabs = tabs,
-                activeTab = activeTab,
-                enabledScriptsCount = enabledScriptsCount,
-                isIncognito = isIncognito,
-                onNewTab = onNewTab,
-                onGoBack = onGoBack,
-                onGoForward = onGoForward,
-                onReloadOrStop = onReloadOrStop,
-                onGoHome = onGoHome,
-                onToggleDesktopMode = onToggleDesktopMode,
-                onToggleExpand = onToggleExpand,
-                onToggleHide = onToggleHide,
-                onOpenUserscripts = onOpenUserscripts,
-                onOpenBookmarks = onOpenBookmarks,
-                onOpenHistory = onOpenHistory,
-                onOpenSettings = onOpenSettings
-            )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+        ) {
+            if (isExpanded) {
+                ExpandedSidebarContent(
+                    tabs = tabs,
+                    activeTab = activeTab,
+                    enabledScriptsCount = enabledScriptsCount,
+                    searchEngine = searchEngine,
+                    isIncognito = isIncognito,
+                    onSelectTab = onSelectTab,
+                    onCloseTab = onCloseTab,
+                    onCloseOtherTabs = onCloseOtherTabs,
+                    onNewTab = onNewTab,
+                    onNavigate = onNavigate,
+                    onGoBack = onGoBack,
+                    onGoForward = onGoForward,
+                    onReloadOrStop = onReloadOrStop,
+                    onGoHome = onGoHome,
+                    onToggleDesktopMode = onToggleDesktopMode,
+                    onToggleExpand = onToggleExpand,
+                    onToggleHide = onToggleHide,
+                    onBookmarkCurrent = onBookmarkCurrent,
+                    onToggleIncognito = onToggleIncognito,
+                    onTranslatePage = onTranslatePage,
+                    onOpenUserscripts = onOpenUserscripts,
+                    onOpenBookmarks = onOpenBookmarks,
+                    onOpenHistory = onOpenHistory,
+                    onOpenFindInPage = onOpenFindInPage,
+                    onOpenSettings = onOpenSettings
+                )
+            } else {
+                SlimSidebarContent(
+                    tabs = tabs,
+                    activeTab = activeTab,
+                    enabledScriptsCount = enabledScriptsCount,
+                    isIncognito = isIncognito,
+                    onNewTab = onNewTab,
+                    onGoBack = onGoBack,
+                    onGoForward = onGoForward,
+                    onReloadOrStop = onReloadOrStop,
+                    onGoHome = onGoHome,
+                    onToggleDesktopMode = onToggleDesktopMode,
+                    onToggleExpand = onToggleExpand,
+                    onToggleHide = onToggleHide,
+                    onToggleIncognito = onToggleIncognito,
+                    onTranslatePage = onTranslatePage,
+                    onOpenUserscripts = onOpenUserscripts,
+                    onOpenBookmarks = onOpenBookmarks,
+                    onOpenHistory = onOpenHistory,
+                    onOpenSettings = onOpenSettings
+                )
+            }
         }
     }
 }
@@ -194,6 +211,8 @@ private fun ExpandedSidebarContent(
     onToggleExpand: () -> Unit,
     onToggleHide: () -> Unit,
     onBookmarkCurrent: () -> Unit,
+    onToggleIncognito: () -> Unit,
+    onTranslatePage: () -> Unit,
     onOpenUserscripts: () -> Unit,
     onOpenBookmarks: () -> Unit,
     onOpenHistory: () -> Unit,
@@ -230,17 +249,27 @@ private fun ExpandedSidebarContent(
                         color = MaterialTheme.colorScheme.primary
                     )
                 )
-                if (isIncognito) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = MaterialTheme.colorScheme.errorContainer
+                Spacer(modifier = Modifier.width(6.dp))
+                Surface(
+                    onClick = onToggleIncognito,
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isIncognito) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Icon(
+                            imageVector = Icons.Default.VisibilityOff,
+                            contentDescription = "切换无痕模式",
+                            tint = if (isIncognito) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
                         Text(
-                            text = "无痕",
+                            text = if (isIncognito) "无痕" else "常规",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            color = if (isIncognito) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -369,6 +398,17 @@ private fun ExpandedSidebarContent(
                 Icon(
                     imageVector = Icons.Default.Home,
                     contentDescription = "主页",
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            IconButton(
+                onClick = onTranslatePage,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Translate,
+                    contentDescription = "网页翻译",
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -587,6 +627,8 @@ private fun SlimSidebarContent(
     onToggleDesktopMode: (String) -> Unit,
     onToggleExpand: () -> Unit,
     onToggleHide: () -> Unit,
+    onToggleIncognito: () -> Unit,
+    onTranslatePage: () -> Unit,
     onOpenUserscripts: () -> Unit,
     onOpenBookmarks: () -> Unit,
     onOpenHistory: () -> Unit,
@@ -660,6 +702,15 @@ private fun SlimSidebarContent(
                 )
             }
 
+            IconButton(onClick = onTranslatePage, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    imageVector = Icons.Default.Translate,
+                    contentDescription = "网页翻译",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
             HorizontalDivider(modifier = Modifier.width(36.dp))
             Spacer(modifier = Modifier.height(8.dp))
@@ -690,6 +741,16 @@ private fun SlimSidebarContent(
 
         // Bottom section
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            // Incognito Mode Toggle Button
+            IconButton(onClick = onToggleIncognito, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    imageVector = Icons.Default.VisibilityOff,
+                    contentDescription = "无痕模式",
+                    tint = if (isIncognito) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
             // Userscript button
             BadgedBox(
                 badge = {

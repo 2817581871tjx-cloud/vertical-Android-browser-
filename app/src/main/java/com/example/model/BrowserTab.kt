@@ -11,6 +11,7 @@ data class BrowserTab(
     val canGoForward: Boolean = false,
     val isLoading: Boolean = false,
     val progress: Int = 0,
-    val isDesktopMode: Boolean = true, // Default to Desktop Mode for tablets for rich desktop websites!
+    val isDesktopMode: Boolean = false, // Default to Native System WebView User Agent
+    val isIncognito: Boolean = false,
     val favicon: Bitmap? = null
 )

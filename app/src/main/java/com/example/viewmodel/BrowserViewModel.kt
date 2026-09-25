@@ -28,6 +28,8 @@ sealed interface WebCommand {
     data class FindInPage(val query: String, val forward: Boolean = true) : WebCommand
     data object ClearFindMatches : WebCommand
     data object ClearCacheAndCookies : WebCommand
+    data class TranslatePage(val tabId: String, val targetLanguage: String = "zh-CN") : WebCommand
+    data class RestoreOriginalPage(val tabId: String) : WebCommand
 }
 
 class BrowserViewModel(application: Application) : AndroidViewModel(application) {
@@ -51,7 +53,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private val initialTab = BrowserTab(
         title = "微软必应",
         url = "https://www.bing.com",
-        isDesktopMode = true
+        isDesktopMode = false
     )
     private val _tabs = MutableStateFlow<List<BrowserTab>>(listOf(initialTab))
     val tabs: StateFlow<List<BrowserTab>> = _tabs.asStateFlow()
@@ -73,6 +75,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     // Incognito Mode
     private val _isIncognito = MutableStateFlow(false)
     val isIncognito: StateFlow<Boolean> = _isIncognito.asStateFlow()
+
+    // Translation Bar & Controls
+    private val _showTranslationBar = MutableStateFlow(false)
+    val showTranslationBar: StateFlow<Boolean> = _showTranslationBar.asStateFlow()
+
+    private val _isTranslating = MutableStateFlow(false)
+    val isTranslating: StateFlow<Boolean> = _isTranslating.asStateFlow()
 
     // Dialog & Overlay controls
     private val _showUserscriptDialog = MutableStateFlow(false)
@@ -114,14 +123,24 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun openNewTab(url: String = "https://www.bing.com", title: String = "新标签页") {
+    fun openNewTab(
+        url: String = "https://www.bing.com",
+        title: String = "新标签页",
+        isIncognito: Boolean = _isIncognito.value
+    ) {
         val newTab = BrowserTab(
             title = title,
             url = url,
-            isDesktopMode = true
+            isDesktopMode = false,
+            isIncognito = isIncognito
         )
         _tabs.value = _tabs.value + newTab
         _selectedTabId.value = newTab.id
+    }
+
+    fun openNewIncognitoTab(url: String = "https://www.bing.com") {
+        openNewTab(url = url, title = "无痕标签页", isIncognito = true)
+        showToast("已打开全新无痕标签页")
     }
 
     fun closeTab(tabId: String) {
@@ -131,7 +150,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             val newSingleTab = BrowserTab(
                 title = "微软必应",
                 url = "https://www.bing.com",
-                isDesktopMode = true
+                isDesktopMode = false,
+                isIncognito = _isIncognito.value
             )
             _tabs.value = listOf(newSingleTab)
             _selectedTabId.value = newSingleTab.id
@@ -245,7 +265,48 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     fun toggleIncognito() {
         _isIncognito.value = !_isIncognito.value
-        showToast(if (_isIncognito.value) "已开启无痕浏览模式 (不记录历史)" else "已关闭无痕浏览")
+        showToast(if (_isIncognito.value) "已开启无痕浏览模式 (不留历史与数据)" else "已关闭无痕浏览")
+    }
+
+    fun toggleTranslationBar() {
+        _showTranslationBar.value = !_showTranslationBar.value
+        if (_showTranslationBar.value) {
+            translateActivePage("zh-CN")
+        }
+    }
+
+    fun setTranslationBarVisible(visible: Boolean) {
+        _showTranslationBar.value = visible
+    }
+
+    fun translateActivePage(targetLang: String = "zh-CN") {
+        val tab = activeTab ?: return
+        _isTranslating.value = true
+        _webCommands.tryEmit(WebCommand.TranslatePage(tab.id, targetLang))
+        showToast("已启动页面翻译: 转换为 ${if (targetLang == "zh-CN") "简体中文" else targetLang}")
+    }
+
+    fun restoreActivePageOriginal() {
+        val tab = activeTab ?: return
+        _isTranslating.value = false
+        _webCommands.tryEmit(WebCommand.RestoreOriginalPage(tab.id))
+        showToast("已恢复网页原文")
+    }
+
+    fun translateViaGoogleWeb() {
+        val tab = activeTab ?: return
+        if (tab.url.isNotBlank() && tab.url.startsWith("http")) {
+            try {
+                val encoded = java.net.URLEncoder.encode(tab.url, "UTF-8")
+                val googleUrl = "https://translate.google.com/translate?sl=auto&tl=zh-CN&u=$encoded"
+                openNewTab(url = googleUrl, title = "Google 网页翻译")
+                showToast("已通过 Google 网页翻译代理打开")
+            } catch (e: Exception) {
+                showToast("翻译失败: ${e.message}")
+            }
+        } else {
+            showToast("当前页面非有效网址，无法翻译")
+        }
     }
 
     fun setFindInPageVisible(visible: Boolean) {
